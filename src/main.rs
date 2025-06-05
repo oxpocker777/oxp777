@@ -1,0 +1,50 @@
+```rust
+use tokio::sync::mpsc;
+use libp2p::{identity, PeerId, swarm::{SwarmEvent, Swarm}, Multiaddr, development_transport};
+use sled::Db;
+use ed25519_dalek::{Keypair, Signature, Signer};
+use wasmtime::{Engine, Module, Store};
+use clap::Parser;
+
+mod network;
+mod blockchain;
+mod storage;
+mod contracts;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Inicializa banco sled
+    let db: Db = sled::open("oxp777_db")?;
+
+    // Gera chave para identidade do nó
+    let local_key = identity::Keypair::generate_ed25519();
+    let local_peer_id = PeerId::from(local_key.public());
+    println!("Local peer id: {:?}", local_peer_id);
+
+    // Configura transporte libp2p
+    let transport = development_transport(local_key.clone()).await?;
+
+    // Configura comportamento da rede (discovery, messaging)
+    let behaviour = network::build_behaviour();
+
+    let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+
+    // Aqui você configura os endereços que quer escutar (exemplo)
+[05/06, 06:04] ChatGPT: let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse()?;
+    Swarm::listen_on(&mut swarm, listen_addr)?;
+
+    // Loop principal para lidar com eventos da rede
+    loop {
+        match swarm.select_next_some().await {
+            SwarmEvent::NewListenAddr { address, .. } => {
+                println!("Escutando em {:?}", address);
+            }
+            SwarmEvent::Behaviour(event) => {
+                // tratar eventos customizados do seu comportamento
+                network::handle_event(event, &db).await;
+            }
+            _ => {}
+        }
+    }
+}
+```
